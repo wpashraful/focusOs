@@ -12,6 +12,7 @@ use App\Services\AI\HybridIntentRouter;
 use App\Services\AI\ObservabilityLogger;
 use App\Services\AI\ToolRegistry;
 use App\Jobs\ExtractMemoryJob;
+use App\Services\Telegram\TelegramService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -45,7 +46,8 @@ class ProcessAIChat implements ShouldQueue
         HybridIntentRouter $intentRouter,
         FocusGuard $focusGuard,
         ConversationSummarizer $summarizer,
-        ToolRegistry $toolRegistry
+        ToolRegistry $toolRegistry,
+        TelegramService $telegramService
     ): void {
         // 1. Detect Intent using Hybrid Intent Router
         $routing = $intentRouter->route($this->userMessageText);
@@ -59,6 +61,12 @@ class ProcessAIChat implements ShouldQueue
                 'role'            => 'assistant',
                 'content'         => $redirectMsg,
             ]);
+
+            // Reply to Telegram if chat ID exists
+            $telegramChatId = cache()->pull("conversation_{$this->conversation->id}_telegram_chat_id");
+            if ($telegramChatId) {
+                $telegramService->sendMessage($telegramChatId, $redirectMsg);
+            }
 
             if ($summarizer->shouldSummarize($this->conversation)) {
                 SummarizeConversationJob::dispatch($this->conversation);
@@ -123,6 +131,12 @@ class ProcessAIChat implements ShouldQueue
                 'content'          => $response['text'],
                 'tokens_estimated' => $response['completion_tokens'],
             ]);
+
+            // Reply to Telegram if chat ID exists
+            $telegramChatId = cache()->pull("conversation_{$this->conversation->id}_telegram_chat_id");
+            if ($telegramChatId) {
+                $telegramService->sendMessage($telegramChatId, $response['text']);
+            }
 
             // Dispatch background memory extraction
             ExtractMemoryJob::dispatch($this->userMessageText, $response['text'], $this->conversation->project);

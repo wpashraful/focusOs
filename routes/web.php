@@ -11,6 +11,7 @@ use App\Http\Controllers\RoutineController;
 use App\Http\Controllers\DailyTargetController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ResourceController;
+use App\Http\Controllers\TelegramWebhookController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -119,5 +120,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/progress', fn() => Inertia::render('ComingSoon', ['page' => 'Progress']))->name('progress.index');
     Route::get('/ideas', fn() => Inertia::render('ComingSoon', ['page' => 'Future Ideas']))->name('ideas.index');
 });
+
+Route::post('/telegram/webhook', [TelegramWebhookController::class, 'handle'])->name('telegram.webhook');
 
 require __DIR__.'/auth.php';
