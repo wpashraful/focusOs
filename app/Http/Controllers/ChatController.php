@@ -7,6 +7,9 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Services\AI\AIProviderInterface;
 use App\Services\AI\ObservabilityLogger;
+use App\Services\AI\ContextBuilder;
+use App\Services\AI\HybridIntentRouter;
+use App\Services\AI\FocusGuard;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -96,35 +99,71 @@ class ChatController extends Controller
     /**
      * SSE Streaming Endpoint for Real-time tokens (Step 4.6)
      */
-    public function stream(Conversation $conversation, AIProviderInterface $aiProvider, ObservabilityLogger $logger)
-    {
-        return new StreamedResponse(function () use ($conversation, $aiProvider, $logger) {
+    public function stream(
+        Conversation $conversation,
+        AIProviderInterface $aiProvider,
+        ObservabilityLogger $logger,
+        ContextBuilder $contextBuilder,
+        HybridIntentRouter $intentRouter,
+        FocusGuard $focusGuard
+    ) {
+        $lastUserMessage = $conversation->messages()->where('role', 'user')->latest()->first();
+        $userText = $lastUserMessage ? $lastUserMessage->content : '';
+
+        // 1. Detect Intent using Hybrid Intent Router
+        $routing = $intentRouter->route($userText);
+
+        // 2. Intercept off-topic intents using FocusGuard
+        if ($focusGuard->shouldRedirect($routing['intent'])) {
+            $redirectMsg = $focusGuard->redirectResponse($conversation->project);
+
+            return new StreamedResponse(function () use ($conversation, $redirectMsg) {
+                header('Content-Type: text/event-stream');
+                header('Cache-Control: no-cache');
+                header('Connection: keep-alive');
+                header('X-Accel-Buffering: no');
+
+                // Stream the guard redirect message instantly
+                echo "data: " . json_encode(['token' => $redirectMsg]) . "\n\n";
+                ob_flush();
+                flush();
+
+                // Save assistant message to DB
+                Message::create([
+                    'conversation_id' => $conversation->id,
+                    'role'            => 'assistant',
+                    'content'         => $redirectMsg,
+                ]);
+
+                echo "data: [DONE]\n\n";
+                ob_flush();
+                flush();
+            });
+        }
+
+        // 3. Normal streaming pipeline
+        return new StreamedResponse(function () use ($conversation, $contextBuilder, $routing) {
             header('Content-Type: text/event-stream');
             header('Cache-Control: no-cache');
             header('Connection: keep-alive');
             header('X-Accel-Buffering: no'); // Disable FastCGI buffering in Nginx/Apache
 
             // Fetch last 10 messages + system prompt
-            $systemPrompt = "You are FocusOS AI Coach. Assist the user with their current task/goals.";
+            $projectContext = "";
             $project = $conversation->project;
             if ($project) {
-                $systemPrompt .= "\nProject Context: \"{$project->name}\"\n";
-                if ($project->current_phase_name) {
-                    $systemPrompt .= "Phase: {$project->current_phase_name}. Goal: {$project->current_phase_goal}";
-                }
+                $projectContext = $contextBuilder->build($project, 2000);
             }
+
+            $systemPrompt = "You are FocusOS AI Coach, a premium productivity coach helping the user stay on track.\n"
+                          . "Keep your answers highly actionable, brief, and structured.\n\n"
+                          . $projectContext;
 
             $dbMessages = $conversation->messages()
                 ->latest()
                 ->take(10)
                 ->get()
                 ->reverse();
-
-            $messages = [];
-            $messages[] = ['role' => 'system', 'content' => $systemPrompt];
-            foreach ($dbMessages as $msg) {
-                $messages[] = ['role' => $msg->role, 'content' => $msg->content];
-            }
 
             $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent?key=" . env('GEMINI_API_KEY');
 
@@ -134,6 +173,18 @@ class ChatController extends Controller
                     'parts' => [['text' => $systemPrompt]]
                 ]
             ];
+
+            // If the conversation already has a summary, prepend it
+            if ($conversation->summary) {
+                $payload['contents'][] = [
+                    'role'  => 'user',
+                    'parts' => [['text' => "Previous summary context: " . $conversation->summary]]
+                ];
+                $payload['contents'][] = [
+                    'role'  => 'model',
+                    'parts' => [['text' => "Understood. I will keep that in mind."]]
+                ];
+            }
 
             foreach ($dbMessages as $msg) {
                 $payload['contents'][] = [
@@ -153,15 +204,11 @@ class ChatController extends Controller
             $fullResponseText = "";
 
             curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use (&$fullResponseText) {
-                // Parse Gemini stream JSON chunks
-                // Format: [{"candidates": [{"content": {"parts": [{"text": "chunk"}]}}]}]
-                // Since curl yields raw chunks, we split/decode them
                 $lines = explode("\n", $data);
                 foreach ($lines as $line) {
                     $trimmed = trim($line);
                     if (empty($trimmed)) continue;
 
-                    // Remove leading comma or bracket if it arrives that way
                     $trimmed = ltrim($trimmed, ',[');
                     $trimmed = rtrim($trimmed, ']');
 
@@ -170,7 +217,6 @@ class ChatController extends Controller
 
                     if ($token) {
                         $fullResponseText .= $token;
-                        // Format as SSE
                         echo "data: " . json_encode(['token' => $token]) . "\n\n";
                         ob_flush();
                         flush();
