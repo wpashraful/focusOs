@@ -200,7 +200,7 @@ class ChatController extends Controller
                 ->get()
                 ->reverse();
 
-            $modelName = 'gemini-2.5-flash';
+            $modelName = 'gemini-3.5-flash';
             if ($project && $project->aiSetting) {
                 $modelName = $project->aiSetting->model_name;
             }

@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Log;
 class GeminiProvider implements AIProviderInterface
 {
     protected string $apiKey;
-    protected string $defaultModel = 'gemini-2.5-flash';
+    protected string $defaultModel = 'gemini-3.5-flash';
 
     public function __construct()
     {
