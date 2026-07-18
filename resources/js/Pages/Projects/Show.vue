@@ -98,16 +98,56 @@
                 </div>
             </div>
 
-            <!-- Placeholder sections for later steps -->
-            <div class="grid-2">
-                <div class="card placeholder-card">
-                    <h4 class="card__title">📌 Tasks <span class="badge">Coming Step 3</span></h4>
-                    <p class="placeholder-text">Tasks will appear here once Step 3 is built.</p>
+            <!-- AI Provider Settings -->
+            <div class="card ai-settings-card">
+                <div class="card__header">
+                    <h3 class="card__title">🤖 AI Model Settings</h3>
+                    <span class="card__sub">Configure which AI model powers this project</span>
                 </div>
-                <div class="card placeholder-card">
-                    <h4 class="card__title">🎯 Goals <span class="badge">Coming Step 3</span></h4>
-                    <p class="placeholder-text">Project goals will appear here.</p>
-                </div>
+
+                <div v-if="loadingProviders" class="ai-loading">Loading providers…</div>
+
+                <form v-else @submit.prevent="saveAISettings" class="ai-form">
+                    <div class="ai-form__grid">
+                        <!-- Provider Select -->
+                        <div class="field">
+                            <label class="field__label">AI Provider</label>
+                            <select v-model="aiForm.ai_provider_id" class="field__select" id="ai-provider-select">
+                                <option value="">— Select Provider —</option>
+                                <option v-for="p in providers" :key="p.id" :value="p.id">{{ p.name }}</option>
+                            </select>
+                        </div>
+
+                        <!-- Model Name -->
+                        <div class="field">
+                            <label class="field__label">Model Name</label>
+                            <input v-model="aiForm.model_name" class="field__input" placeholder="e.g. gemini-1.5-flash" id="ai-model-input" />
+                        </div>
+
+                        <!-- Temperature -->
+                        <div class="field">
+                            <label class="field__label">Temperature <span class="field__hint">{{ aiForm.temperature }}</span></label>
+                            <input type="range" v-model.number="aiForm.temperature" min="0" max="2" step="0.1" class="field__range" id="ai-temperature" />
+                        </div>
+
+                        <!-- Max Tokens -->
+                        <div class="field">
+                            <label class="field__label">Max Tokens</label>
+                            <input type="number" v-model.number="aiForm.max_tokens" class="field__input" min="128" max="16384" id="ai-max-tokens" />
+                        </div>
+                    </div>
+
+                    <!-- System Prompt Override -->
+                    <div class="field">
+                        <label class="field__label">System Prompt Override <span class="field__hint">(optional)</span></label>
+                        <textarea v-model="aiForm.system_prompt" class="field__textarea" rows="3" placeholder="Leave blank to use default FocusOS prompt…" id="ai-system-prompt" />
+                    </div>
+
+                    <div class="ai-form__footer">
+                        <span v-if="aiSaved" class="ai-saved">✅ Saved!</span>
+                        <button type="submit" class="btn-primary" id="save-ai-btn">Save AI Settings</button>
+                    </div>
+                </form>
             </div>
 
         </div>
@@ -115,8 +155,8 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
-import { Link, useForm } from '@inertiajs/vue3';
+import { ref, computed, onMounted } from 'vue';
+import { Link, useForm, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
 const props = defineProps({
@@ -146,6 +186,34 @@ const daysLeft = computed(() => {
     const diff = new Date(props.project.phase_ends_at) - new Date();
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
 });
+
+// ── AI Provider Settings ────────────────────────────────
+const providers       = ref([]);
+const loadingProviders = ref(true);
+const aiSaved         = ref(false);
+
+const aiForm = ref({
+    ai_provider_id: props.project.ai_setting?.ai_provider_id ?? '',
+    model_name:     props.project.ai_setting?.model_name     ?? 'gemini-1.5-flash',
+    temperature:    props.project.ai_setting?.temperature    ?? 0.7,
+    max_tokens:     props.project.ai_setting?.max_tokens     ?? 2048,
+    system_prompt:  props.project.ai_setting?.system_prompt  ?? '',
+});
+
+onMounted(async () => {
+    try {
+        const res = await fetch(route('ai-providers.index'), { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
+        providers.value = await res.json();
+    } catch {}
+    loadingProviders.value = false;
+});
+
+const saveAISettings = () => {
+    router.put(route('ai-settings.update', props.project.id), aiForm.value, {
+        preserveScroll: true,
+        onSuccess: () => { aiSaved.value = true; setTimeout(() => aiSaved.value = false, 2500); },
+    });
+};
 </script>
 
 <style scoped>
@@ -256,4 +324,19 @@ const daysLeft = computed(() => {
     animation: spin 0.7s linear infinite; display: inline-block;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* AI Settings */
+.ai-settings-card { margin-top: 4px; }
+.card__sub { font-size: 0.78rem; color: #64748b; }
+.ai-loading { font-size: 0.85rem; color: #64748b; padding: 12px 0; }
+.ai-form { display: flex; flex-direction: column; gap: 16px; margin-top: 12px; }
+.ai-form__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+.field__select { background: #141620; border: 1px solid #2a2d3e; border-radius: 8px; padding: 9px 12px; font-size: 0.88rem; color: #e2e8f0; outline: none; transition: border-color 0.15s; width: 100%; }
+.field__select:focus { border-color: #6366f1; }
+.field__range { width: 100%; accent-color: #6366f1; cursor: pointer; margin-top: 4px; }
+.field__hint { color: #6366f1; font-size: 0.78rem; font-weight: 600; }
+.field__textarea { background: #141620; border: 1px solid #2a2d3e; border-radius: 8px; padding: 9px 12px; font-size: 0.85rem; color: #e2e8f0; font-family: inherit; outline: none; resize: vertical; transition: border-color 0.15s; width: 100%; box-sizing: border-box; }
+.field__textarea:focus { border-color: #6366f1; }
+.ai-form__footer { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.ai-saved { font-size: 0.83rem; color: #34d399; font-weight: 600; }
 </style>

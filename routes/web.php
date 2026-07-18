@@ -12,6 +12,9 @@ use App\Http\Controllers\DailyTargetController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ResourceController;
 use App\Http\Controllers\TelegramWebhookController;
+use App\Http\Controllers\ProgressController;
+use App\Http\Controllers\FutureIdeasController;
+use App\Http\Controllers\AIProviderController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -116,9 +119,18 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/projects/{project}/resources', [ResourceController::class, 'store'])->name('resources.store');
     Route::delete('/projects/{project}/resources/{resource}', [ResourceController::class, 'destroy'])->name('resources.destroy');
 
-    // ── Remaining stubs ───────────────────────────────────────────────────────
-    Route::get('/progress', fn() => Inertia::render('ComingSoon', ['page' => 'Progress']))->name('progress.index');
-    Route::get('/ideas', fn() => Inertia::render('ComingSoon', ['page' => 'Future Ideas']))->name('ideas.index');
+    // ── Progress Dashboard ─────────────────────────────────────────────────────
+    Route::get('/progress', [ProgressController::class, 'index'])->name('progress.index');
+
+    // ── Future Ideas Board ─────────────────────────────────────────────────────
+    Route::get('/ideas', [FutureIdeasController::class, 'index'])->name('ideas.index');
+    Route::post('/ideas', [FutureIdeasController::class, 'store'])->name('ideas.store');
+    Route::patch('/ideas/{idea}', [FutureIdeasController::class, 'update'])->name('ideas.update');
+    Route::delete('/ideas/{idea}', [FutureIdeasController::class, 'destroy'])->name('ideas.destroy');
+
+    // ── AI Provider Settings ───────────────────────────────────────────────────
+    Route::get('/ai-providers', [AIProviderController::class, 'index'])->name('ai-providers.index');
+    Route::put('/projects/{project}/ai-settings', [AIProviderController::class, 'update'])->name('ai-settings.update');
 });
 
 Route::post('/telegram/webhook', [TelegramWebhookController::class, 'handle'])->name('telegram.webhook');

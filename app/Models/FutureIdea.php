@@ -9,10 +9,17 @@ class FutureIdea extends Model
 {
     protected $table = 'future_ideas';
 
-    protected $fillable = ['user_id', 'title', 'content'];
+    protected $fillable = ['user_id', 'project_id', 'title', 'content', 'status', 'notes'];
+
+    protected $casts = ['status' => 'string'];
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
     }
 }

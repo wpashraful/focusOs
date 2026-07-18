@@ -38,7 +38,7 @@ class ProjectController extends Controller
 
     public function show(Workspace $workspace, Project $project)
     {
-        $project->load('phaseSnapshots');
+        $project->load(['phaseSnapshots', 'aiSetting']);
 
         return Inertia::render('Projects/Show', [
             'workspace' => $workspace,

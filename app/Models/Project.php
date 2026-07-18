@@ -55,4 +55,9 @@ class Project extends Model
     {
         return $this->hasMany(DailyTarget::class)->where('is_active', true);
     }
+
+    public function aiSetting(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(\App\Models\ProjectAISetting::class);
+    }
 }

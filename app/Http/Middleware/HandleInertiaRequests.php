@@ -29,10 +29,24 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $user           = $request->user();
+        $currentProject = null;
+
+        if ($user) {
+            $currentProject = $user->workspaces()->with('projects')
+                ->get()->pluck('projects')->flatten()
+                ->where('status', 'active')->first();
+        }
+
         return [
             ...parent::share($request),
             'auth' => [
-                'user' => $request->user(),
+                'user' => $user,
+            ],
+            'currentProject' => $currentProject ? $currentProject->only('id', 'name', 'current_phase_name', 'current_phase_goal', 'phase_ends_at') : null,
+            'flash' => [
+                'success' => fn() => $request->session()->get('success'),
+                'error'   => fn() => $request->session()->get('error'),
             ],
         ];
     }

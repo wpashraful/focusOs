@@ -1,7 +1,13 @@
 <template>
-    <div class="focusos-shell">
+    <div class="focusos-shell" :class="{ 'dark-mode': isDark }">
+
+        <!-- Mobile Overlay -->
+        <div class="mobile-overlay" v-if="mobileOpen" @click="mobileOpen = false" />
+
         <!-- Sidebar -->
-        <aside class="sidebar" :class="{ 'sidebar--collapsed': sidebarCollapsed }">
+        <aside class="sidebar"
+            :class="{ 'sidebar--collapsed': sidebarCollapsed, 'sidebar--mobile-open': mobileOpen }">
+
             <!-- Logo -->
             <div class="sidebar__logo">
                 <div class="logo-icon">
@@ -17,6 +23,8 @@
                     </svg>
                 </div>
                 <span class="logo-text" v-show="!sidebarCollapsed">FocusOS</span>
+                <!-- Mobile close -->
+                <button class="mobile-close-btn" v-show="mobileOpen" @click="mobileOpen = false" aria-label="Close menu">✕</button>
             </div>
 
             <!-- Phase Badge -->
@@ -29,22 +37,24 @@
             <nav class="sidebar__nav">
                 <div class="nav-section">
                     <span class="nav-section__title" v-show="!sidebarCollapsed">Workspace</span>
-                    <NavItem :href="route('dashboard')" icon="dashboard" label="Dashboard" :collapsed="sidebarCollapsed" />
-                    <NavItem :href="route('projects.index')" icon="projects" label="Projects" :collapsed="sidebarCollapsed" />
+                    <NavItem :href="route('dashboard')" icon="dashboard" label="Dashboard" :collapsed="sidebarCollapsed" @click="mobileOpen = false" />
+                    <NavItem :href="route('projects.index')" icon="projects" label="Projects" :collapsed="sidebarCollapsed" @click="mobileOpen = false" />
                 </div>
 
                 <div class="nav-section">
                     <span class="nav-section__title" v-show="!sidebarCollapsed">Daily</span>
-                    <NavItem :href="route('tasks.today')" icon="tasks" label="Today's Tasks" :collapsed="sidebarCollapsed" />
-                    <NavItem :href="route('chat.index')" icon="chat" label="AI Coach" :collapsed="sidebarCollapsed" badge="AI" />
-                    <NavItem :href="route('progress.index')" icon="progress" label="Progress" :collapsed="sidebarCollapsed" />
+                    <NavItem :href="route('tasks.today')" icon="tasks" label="Today's Tasks" :collapsed="sidebarCollapsed" @click="mobileOpen = false" />
+                    <NavItem :href="route('chat.index')" icon="chat" label="AI Coach" :collapsed="sidebarCollapsed" badge="AI" @click="mobileOpen = false" />
+                    <NavItem :href="route('progress.index')" icon="progress" label="Progress" :collapsed="sidebarCollapsed" @click="mobileOpen = false" />
                 </div>
 
                 <div class="nav-section">
                     <span class="nav-section__title" v-show="!sidebarCollapsed">Project</span>
-                    <NavItem :href="route('resources.index')" icon="resources" label="Resources" :collapsed="sidebarCollapsed" />
-                    <NavItem :href="route('ideas.index')" icon="ideas" label="Future Ideas" :collapsed="sidebarCollapsed" />
-                    <NavItem :href="route('routine.edit')" icon="routine" label="Routine" :collapsed="sidebarCollapsed" />
+                    <NavItem
+                        :href="$page.props.currentProject ? route('resources.index', $page.props.currentProject.id) : '#'"
+                        icon="resources" label="Resources" :collapsed="sidebarCollapsed" @click="mobileOpen = false" />
+                    <NavItem :href="route('ideas.index')" icon="ideas" label="Future Ideas" :collapsed="sidebarCollapsed" @click="mobileOpen = false" />
+                    <NavItem :href="route('routine.edit')" icon="routine" label="Routine" :collapsed="sidebarCollapsed" @click="mobileOpen = false" />
                 </div>
             </nav>
 
@@ -62,6 +72,10 @@
                         <span class="user-name">{{ $page.props.auth.user.name }}</span>
                         <Link :href="route('profile.edit')" class="user-settings">Settings</Link>
                     </div>
+                    <!-- Dark Mode Toggle -->
+                    <button class="dark-toggle" @click="toggleDark" :title="isDark ? 'Light Mode' : 'Dark Mode'" id="dark-mode-toggle">
+                        {{ isDark ? '☀️' : '🌙' }}
+                    </button>
                 </div>
             </div>
         </aside>
@@ -71,6 +85,10 @@
             <!-- Top Bar -->
             <header class="topbar">
                 <div class="topbar__left">
+                    <!-- Mobile Hamburger -->
+                    <button class="hamburger-btn" @click="mobileOpen = true" aria-label="Open menu" id="hamburger-btn">
+                        <span /><span /><span />
+                    </button>
                     <h1 class="topbar__title" v-if="title">{{ title }}</h1>
                 </div>
                 <div class="topbar__right">
@@ -93,7 +111,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import NavItem from '@/Components/NavItem.vue';
 import IconChevron from '@/Components/Icons/IconChevron.vue';
@@ -103,6 +121,18 @@ defineProps({
 });
 
 const sidebarCollapsed = ref(false);
+const mobileOpen       = ref(false);
+const isDark           = ref(true); // default dark
+
+onMounted(() => {
+    const stored = localStorage.getItem('focusos-dark-mode');
+    isDark.value = stored === null ? true : stored === 'true';
+});
+
+const toggleDark = () => {
+    isDark.value = !isDark.value;
+    localStorage.setItem('focusos-dark-mode', isDark.value);
+};
 </script>
 
 <style scoped>
@@ -115,6 +145,29 @@ const sidebarCollapsed = ref(false);
     font-family: 'Inter', sans-serif;
 }
 
+/* Light mode overrides */
+.focusos-shell:not(.dark-mode) {
+    background: #f1f5f9;
+    color: #1e293b;
+}
+.focusos-shell:not(.dark-mode) .sidebar { background: #ffffff; border-right-color: #e2e8f0; }
+.focusos-shell:not(.dark-mode) .topbar { background: #ffffff; border-bottom-color: #e2e8f0; }
+.focusos-shell:not(.dark-mode) .nav-section__title { color: #94a3b8; }
+.focusos-shell:not(.dark-mode) .user-name { color: #1e293b; }
+.focusos-shell:not(.dark-mode) .topbar__title { color: #1e293b; }
+
+/* ── Mobile Overlay ────────────────────────────── */
+.mobile-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 40;
+    display: none;
+}
+@media (max-width: 768px) {
+    .mobile-overlay { display: block; }
+}
+
 /* ── Sidebar ────────────────────────────────────── */
 .sidebar {
     width: 240px;
@@ -123,17 +176,31 @@ const sidebarCollapsed = ref(false);
     border-right: 1px solid #1e2130;
     display: flex;
     flex-direction: column;
-    transition: width 0.25s ease;
+    transition: width 0.25s ease, transform 0.25s ease;
     flex-shrink: 0;
     position: sticky;
     top: 0;
     height: 100vh;
     overflow-y: auto;
     overflow-x: hidden;
+    z-index: 50;
 }
 
 .sidebar--collapsed {
     width: 64px;
+}
+
+/* Mobile sidebar hidden by default */
+@media (max-width: 768px) {
+    .sidebar {
+        position: fixed;
+        left: 0; top: 0; bottom: 0;
+        width: 260px !important;
+        transform: translateX(-100%);
+    }
+    .sidebar--mobile-open {
+        transform: translateX(0);
+    }
 }
 
 /* ── Logo ───────────────────────────────────────── */
@@ -161,6 +228,17 @@ const sidebarCollapsed = ref(false);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     white-space: nowrap;
+    flex: 1;
+}
+
+.mobile-close-btn {
+    background: transparent;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 4px;
+    margin-left: auto;
 }
 
 /* ── Phase Badge ────────────────────────────────── */
@@ -255,7 +333,7 @@ const sidebarCollapsed = ref(false);
 .user-row {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
 }
 
 .user-avatar {
@@ -283,6 +361,7 @@ const sidebarCollapsed = ref(false);
     display: flex;
     flex-direction: column;
     min-width: 0;
+    flex: 1;
 }
 
 .user-name {
@@ -304,6 +383,22 @@ const sidebarCollapsed = ref(false);
 .user-settings:hover {
     color: #6366f1;
 }
+
+.dark-toggle {
+    background: transparent;
+    border: 1px solid #1e2130;
+    border-radius: 6px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+    transition: border-color 0.15s;
+}
+.dark-toggle:hover { border-color: #6366f1; }
 
 /* ── Main Wrapper ───────────────────────────────── */
 .main-wrapper {
@@ -327,6 +422,12 @@ const sidebarCollapsed = ref(false);
     z-index: 10;
 }
 
+.topbar__left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
 .topbar__title {
     font-size: 1rem;
     font-weight: 600;
@@ -338,6 +439,29 @@ const sidebarCollapsed = ref(false);
     display: flex;
     align-items: center;
     gap: 12px;
+}
+
+/* Hamburger Button */
+.hamburger-btn {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    background: transparent;
+    border: 1px solid #1e2130;
+    border-radius: 6px;
+    padding: 7px 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.hamburger-btn span {
+    display: block;
+    width: 18px;
+    height: 2px;
+    background: #64748b;
+    border-radius: 2px;
+}
+@media (max-width: 768px) {
+    .hamburger-btn { display: flex; }
 }
 
 /* ── Flash Messages ─────────────────────────────── */
@@ -362,5 +486,10 @@ const sidebarCollapsed = ref(false);
     flex: 1;
     padding: 28px;
     overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+    .main-content { padding: 16px; }
+    .topbar { padding: 0 16px; }
 }
 </style>
