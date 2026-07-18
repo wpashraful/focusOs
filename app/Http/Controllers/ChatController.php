@@ -72,7 +72,7 @@ class ChatController extends Controller
             'title'      => $validated['title'] ?? 'New Chat Session',
         ]);
 
-        return redirect()->route('chat.show', $conversation->id);
+        return redirect()->route('chat.index', $conversation->id);
     }
 
     /**
