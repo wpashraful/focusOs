@@ -10,6 +10,7 @@ use App\Services\AI\ObservabilityLogger;
 use App\Services\AI\ContextBuilder;
 use App\Services\AI\HybridIntentRouter;
 use App\Services\AI\FocusGuard;
+use App\Services\AI\ToolRegistry;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -105,7 +106,8 @@ class ChatController extends Controller
         ObservabilityLogger $logger,
         ContextBuilder $contextBuilder,
         HybridIntentRouter $intentRouter,
-        FocusGuard $focusGuard
+        FocusGuard $focusGuard,
+        ToolRegistry $toolRegistry
     ) {
         $lastUserMessage = $conversation->messages()->where('role', 'user')->latest()->first();
         $userText = $lastUserMessage ? $lastUserMessage->content : '';
@@ -123,12 +125,10 @@ class ChatController extends Controller
                 header('Connection: keep-alive');
                 header('X-Accel-Buffering: no');
 
-                // Stream the guard redirect message instantly
                 echo "data: " . json_encode(['token' => $redirectMsg]) . "\n\n";
                 ob_flush();
                 flush();
 
-                // Save assistant message to DB
                 Message::create([
                     'conversation_id' => $conversation->id,
                     'role'            => 'assistant',
@@ -141,8 +141,42 @@ class ChatController extends Controller
             });
         }
 
-        // 3. Normal streaming pipeline
-        return new StreamedResponse(function () use ($conversation, $contextBuilder, $routing) {
+        // 3. Fast Intent Rule-based Tool Executions (Instant response, no LLM call)
+        if (in_array($routing['intent'], ['done_report', 'delay_report', 'idea_capture'])) {
+            $toolMap = [
+                'done_report'  => ['name' => 'complete_task', 'args' => ['title' => $userText]],
+                'delay_report' => ['name' => 'reschedule_routine', 'args' => ['delay_minutes' => $routing['extracted']['delay_minutes'] ?? 15]],
+                'idea_capture' => ['name' => 'save_future_idea', 'args' => ['title' => $routing['extracted']['idea'] ?? $userText]],
+            ];
+
+            $toolDef = $toolMap[$routing['intent']];
+            $outcome = $toolRegistry->execute($toolDef['name'], $toolDef['args'], $conversation->project);
+            $outcomeMsg = $outcome['result'] ?? 'Action completed successfully.';
+
+            return new StreamedResponse(function () use ($conversation, $outcomeMsg) {
+                header('Content-Type: text/event-stream');
+                header('Cache-Control: no-cache');
+                header('Connection: keep-alive');
+                header('X-Accel-Buffering: no');
+
+                echo "data: " . json_encode(['token' => "🛠️ Action Executed:\n" . $outcomeMsg]) . "\n\n";
+                ob_flush();
+                flush();
+
+                Message::create([
+                    'conversation_id' => $conversation->id,
+                    'role'            => 'assistant',
+                    'content'         => $outcomeMsg,
+                ]);
+
+                echo "data: [DONE]\n\n";
+                ob_flush();
+                flush();
+            });
+        }
+
+        // 4. Normal streaming pipeline
+        return new StreamedResponse(function () use ($conversation, $contextBuilder, $routing, $toolRegistry) {
             header('Content-Type: text/event-stream');
             header('Cache-Control: no-cache');
             header('Connection: keep-alive');
@@ -190,6 +224,14 @@ class ChatController extends Controller
                 $payload['contents'][] = [
                     'role'  => ($msg->role === 'assistant') ? 'model' : 'user',
                     'parts' => [['text' => $msg->content]]
+                ];
+            }
+
+            // Inject tools
+            $tools = $toolRegistry->getDefinitions();
+            if (!empty($tools)) {
+                $payload['tools'] = [
+                    ['functionDeclarations' => $tools]
                 ];
             }
 

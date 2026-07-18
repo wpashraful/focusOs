@@ -10,6 +10,7 @@ use App\Services\AI\ConversationSummarizer;
 use App\Services\AI\FocusGuard;
 use App\Services\AI\HybridIntentRouter;
 use App\Services\AI\ObservabilityLogger;
+use App\Services\AI\ToolRegistry;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -42,7 +43,8 @@ class ProcessAIChat implements ShouldQueue
         ContextBuilder $contextBuilder,
         HybridIntentRouter $intentRouter,
         FocusGuard $focusGuard,
-        ConversationSummarizer $summarizer
+        ConversationSummarizer $summarizer,
+        ToolRegistry $toolRegistry
     ): void {
         // 1. Detect Intent using Hybrid Intent Router
         $routing = $intentRouter->route($this->userMessageText);
@@ -57,7 +59,6 @@ class ProcessAIChat implements ShouldQueue
                 'content'         => $redirectMsg,
             ]);
 
-            // Dispatch background summarization job check
             if ($summarizer->shouldSummarize($this->conversation)) {
                 SummarizeConversationJob::dispatch($this->conversation);
             }
@@ -99,9 +100,14 @@ class ProcessAIChat implements ShouldQueue
             ];
         }
 
-        // 5. Call AI
+        // 5. Gather Tool Definitions
+        $tools = $toolRegistry->getDefinitions();
+
+        // 6. Call AI with tools injection
         try {
             $response = $aiProvider->chat($messages, [
+                'tools'        => $tools,
+                'project'      => $this->conversation->project,
                 'log_callback' => function ($logData) use ($logger) {
                     $logData['project_id'] = $this->conversation->project_id;
                     $logData['action'] = 'chat';
@@ -109,7 +115,7 @@ class ProcessAIChat implements ShouldQueue
                 }
             ]);
 
-            // 6. Save response to database
+            // 7. Save response to database
             Message::create([
                 'conversation_id'  => $this->conversation->id,
                 'role'             => 'assistant',
@@ -117,7 +123,7 @@ class ProcessAIChat implements ShouldQueue
                 'tokens_estimated' => $response['completion_tokens'],
             ]);
 
-            // 7. Dispatch background summarization check
+            // 8. Dispatch background summarization check
             if ($summarizer->shouldSummarize($this->conversation)) {
                 SummarizeConversationJob::dispatch($this->conversation);
             }

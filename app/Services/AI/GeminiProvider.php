@@ -23,13 +23,19 @@ class GeminiProvider implements AIProviderInterface
 
         $payload = $this->buildPayload($messages, $temperature, $maxTokens);
 
+        // Inject tools if they exist
+        if (!empty($options['tools'])) {
+            $payload['tools'] = [
+                ['functionDeclarations' => $options['tools']]
+            ];
+        }
+
         $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$this->apiKey}";
 
         $startTime = microtime(true);
 
         try {
             $response = Http::timeout(30)->post($url, $payload);
-
             $latency = (int) (round(microtime(true) - $startTime, 3) * 1000);
 
             if ($response->failed()) {
@@ -37,13 +43,44 @@ class GeminiProvider implements AIProviderInterface
             }
 
             $data = $response->json();
-            $text = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
 
-            // Gemini 1.5 doesn't always return exact usageMetadata, but let's check
+            // Check if model returned a functionCall
+            $functionCall = $data['candidates'][0]['content']['parts'][0]['functionCall'] ?? null;
+
+            if ($functionCall) {
+                $toolName = $functionCall['name'];
+                $toolArgs = $functionCall['args'] ?? [];
+
+                // Execute tool via Registry
+                $registry = app(\App\Services\AI\ToolRegistry::class);
+                $project = $options['project'] ?? null;
+                $toolResult = $registry->execute($toolName, $toolArgs, $project);
+
+                // Prepare function call conversation turn for Gemini
+                // Turn 1: Model request for tool call
+                $messages[] = [
+                    'role' => 'assistant',
+                    'content' => '',
+                    'functionCall' => $functionCall
+                ];
+
+                // Turn 2: User provides tool execution result
+                $messages[] = [
+                    'role' => 'function',
+                    'name' => $toolName,
+                    'content' => json_encode($toolResult)
+                ];
+
+                // Recurse chat to let Gemini synthesize a conversational reply
+                // We strip the tools option to prevent infinite loops
+                unset($options['tools']);
+                return $this->chat($messages, $options);
+            }
+
+            $text = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
             $promptTokens = $data['usageMetadata']['promptTokenCount'] ?? 0;
             $completionTokens = $data['usageMetadata']['candidatesTokenCount'] ?? 0;
 
-            // Save LLM log for observability
             if (isset($options['log_callback'])) {
                 $options['log_callback']([
                     'provider' => 'gemini',
@@ -84,14 +121,22 @@ class GeminiProvider implements AIProviderInterface
 
     public function stream(array $messages, array $options = []): mixed
     {
+        // For streaming, let's keep it simple: we resolve tools before opening
+        // the stream, or let the controller handle it.
         $model = $options['model'] ?? $this->defaultModel;
         $temperature = $options['temperature'] ?? 0.7;
         $maxTokens = $options['max_tokens'] ?? 2048;
 
         $payload = $this->buildPayload($messages, $temperature, $maxTokens);
+
+        if (!empty($options['tools'])) {
+            $payload['tools'] = [
+                ['functionDeclarations' => $options['tools']]
+            ];
+        }
+
         $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:streamGenerateContent?key={$this->apiKey}";
 
-        // Return a generator that can yield text chunks
         return function () use ($url, $payload) {
             $ch = curl_init();
             curl_setopt($ch, CURLOPT_URL, $url);
@@ -100,8 +145,6 @@ class GeminiProvider implements AIProviderInterface
             curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
             curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) {
-                // Gemini SSE returns chunks in JSON format with parts.text
-                // We'll output the data directly to SSE buffer or return it
                 echo $data;
                 ob_flush();
                 flush();
@@ -130,7 +173,6 @@ class GeminiProvider implements AIProviderInterface
 
         $choice = trim(strtolower($res['text']));
 
-        // Match closest category
         foreach ($classes as $c) {
             if (str_contains($choice, strtolower($c))) {
                 return $c;
@@ -140,9 +182,6 @@ class GeminiProvider implements AIProviderInterface
         return $classes[0] ?? 'off_topic';
     }
 
-    /**
-     * Map system/assistant/user roles to Gemini contents payload format
-     */
     protected function buildPayload(array $messages, float $temperature, int $maxTokens): array
     {
         $contents = [];
@@ -158,14 +197,32 @@ class GeminiProvider implements AIProviderInterface
                         ['text' => $content]
                     ]
                 ];
+            } elseif ($role === 'function') {
+                // Gemini function response schema
+                $contents[] = [
+                    'role'  => 'function',
+                    'parts' => [
+                        [
+                            'functionResponse' => [
+                                'name'     => $msg['name'],
+                                'response' => json_decode($content, true) ?? ['result' => $content]
+                            ]
+                        ]
+                    ]
+                ];
             } else {
-                // Gemini roles are 'user' or 'model'
                 $geminiRole = ($role === 'assistant') ? 'model' : 'user';
+                $part = [];
+
+                if (isset($msg['functionCall'])) {
+                    $part['functionCall'] = $msg['functionCall'];
+                } else {
+                    $part['text'] = $content;
+                }
+
                 $contents[] = [
                     'role'  => $geminiRole,
-                    'parts' => [
-                        ['text' => $content]
-                    ]
+                    'parts' => [$part]
                 ];
             }
         }
@@ -185,12 +242,8 @@ class GeminiProvider implements AIProviderInterface
         return $payload;
     }
 
-    /**
-     * Simple cost estimation per 1k tokens
-     */
     protected function calculateCost(string $model, int $prompt, int $completion): float
     {
-        // gemini-1.5-flash: $0.000075 / 1k input, $0.0003 / 1k output
         $inCost = ($prompt / 1000) * 0.000075;
         $outCost = ($completion / 1000) * 0.0003;
         return round($inCost + $outCost, 6);

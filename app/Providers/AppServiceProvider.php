@@ -7,6 +7,12 @@ use App\Services\AI\GeminiProvider;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 
+use Illuminate\Support\Facades\Event;
+use App\Events\TaskCompleted;
+use App\Listeners\UpdateDashboardStats;
+use App\Events\DailyLogUpdated;
+use App\Listeners\RecalculateDailyScore;
+
 class AppServiceProvider extends ServiceProvider
 {
     /**
@@ -23,5 +29,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Vite::prefetch(concurrency: 3);
+
+        Event::listen(TaskCompleted::class, UpdateDashboardStats::class);
+        Event::listen(DailyLogUpdated::class, RecalculateDailyScore::class);
     }
 }
