@@ -11,6 +11,7 @@ use App\Services\AI\ContextBuilder;
 use App\Services\AI\HybridIntentRouter;
 use App\Services\AI\FocusGuard;
 use App\Services\AI\ToolRegistry;
+use App\Jobs\ExtractMemoryJob;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -278,6 +279,9 @@ class ChatController extends Controller
                     'content'         => $fullResponseText,
                     'is_streamed'     => true,
                 ]);
+
+                // Dispatch background memory extraction
+                ExtractMemoryJob::dispatch($userText, $fullResponseText, $conversation->project);
             }
 
             echo "data: [DONE]\n\n";

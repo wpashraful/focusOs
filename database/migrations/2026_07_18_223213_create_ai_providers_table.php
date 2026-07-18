@@ -14,6 +14,10 @@ return new class extends Migration
             $table->string('provider_key')->unique(); // e.g. gemini, openai, openrouter, local
             $table->string('api_base')->nullable();
             $table->boolean('is_active')->default(true);
+            $table->boolean('supports_tools')->default(true);
+            $table->boolean('supports_streaming')->default(true);
+            $table->boolean('supports_embeddings')->default(false);
+            $table->unsignedInteger('provider_dimension')->default(1536);
             $table->json('config')->nullable();
             $table->timestamps();
         });

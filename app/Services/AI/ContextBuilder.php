@@ -29,6 +29,7 @@ class ContextBuilder
             'tasks'         => $this->buildTasksSection($project),
             'routine'       => $this->buildRoutineSection($project),
             'daily_targets' => $this->buildDailyTargetsSection($project),
+            'memories'      => $this->buildMemoriesSection($project),
         ];
 
         // 2. Format them together into one context block, keeping budget safe
@@ -130,6 +131,40 @@ class ContextBuilder
             $achieved = $t->todayLog?->achieved_count ?? 0;
             $out .= "- Target: {$t->label} (Target: {$t->target_count} {$t->unit}/day, Logged today: {$achieved})\n";
         }
+        return $out;
+    }
+
+    protected function buildMemoriesSection(Project $project): string
+    {
+        // Query user memories (project specific or global)
+        $memories = \App\Models\Memory::where('user_id', $project->workspace->owner_id)
+            ->where(function($q) use ($project) {
+                $q->where('project_id', $project->id)->orWhereNull('project_id');
+            })
+            ->get();
+
+        if ($memories->isEmpty()) {
+            return "";
+        }
+
+        // Custom sort by (importance * 0.6) + (recency * 0.4)
+        $sorted = $memories->map(function ($memory) {
+            $daysSinceUpdate = now()->diffInDays($memory->updated_at);
+            $recencyScore = 1 / (1 + $daysSinceUpdate);
+            $score = ($memory->importance_score * 0.6) + ($recencyScore * 0.4);
+            $memory->temp_score = $score;
+            return $memory;
+        })
+        ->sortByDesc('temp_score')
+        ->take(15);
+
+        $out = "Remembered Context / User Preferences:\n";
+        foreach ($sorted as $m) {
+            $out .= "- {$m->key}: {$m->value}\n";
+            // Update last_used_at timestamp
+            $m->update(['last_used_at' => now()]);
+        }
+
         return $out;
     }
 

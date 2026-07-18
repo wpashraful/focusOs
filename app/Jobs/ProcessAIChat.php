@@ -11,6 +11,7 @@ use App\Services\AI\FocusGuard;
 use App\Services\AI\HybridIntentRouter;
 use App\Services\AI\ObservabilityLogger;
 use App\Services\AI\ToolRegistry;
+use App\Jobs\ExtractMemoryJob;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -122,6 +123,9 @@ class ProcessAIChat implements ShouldQueue
                 'content'          => $response['text'],
                 'tokens_estimated' => $response['completion_tokens'],
             ]);
+
+            // Dispatch background memory extraction
+            ExtractMemoryJob::dispatch($this->userMessageText, $response['text'], $this->conversation->project);
 
             // 8. Dispatch background summarization check
             if ($summarizer->shouldSummarize($this->conversation)) {
