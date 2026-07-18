@@ -7,10 +7,12 @@ use App\Models\Project;
 class ContextBuilder
 {
     protected TokenBudget $budget;
+    protected ResourceRetrieverInterface $retriever;
 
-    public function __construct(TokenBudget $budget)
+    public function __construct(TokenBudget $budget, ResourceRetrieverInterface $retriever)
     {
         $this->budget = $budget;
+        $this->retriever = $retriever;
     }
 
     /**
@@ -18,9 +20,10 @@ class ContextBuilder
      *
      * @param  Project  $project
      * @param  int      $totalBudget   Target limit for this context chunk (default: 2000)
+     * @param  string|null $userMessage Optional message to trigger keyword document lookup
      * @return string
      */
-    public function build(Project $project, int $totalBudget = 2000): string
+    public function build(Project $project, int $totalBudget = 2000, ?string $userMessage = null): string
     {
         // 1. Build individual context components
         $sections = [
@@ -30,6 +33,7 @@ class ContextBuilder
             'routine'       => $this->buildRoutineSection($project),
             'daily_targets' => $this->buildDailyTargetsSection($project),
             'memories'      => $this->buildMemoriesSection($project),
+            'resources'     => $this->buildResourcesSection($project, $userMessage),
         ];
 
         // 2. Format them together into one context block, keeping budget safe
@@ -163,6 +167,29 @@ class ContextBuilder
             $out .= "- {$m->key}: {$m->value}\n";
             // Update last_used_at timestamp
             $m->update(['last_used_at' => now()]);
+        }
+
+        return $out;
+    }
+
+    protected function buildResourcesSection(Project $project, ?string $userMessage): string
+    {
+        if (empty($userMessage)) {
+            return "";
+        }
+
+        // Search top 5 relevant document chunks
+        $chunks = $this->retriever->retrieve($userMessage, $project->id, 5);
+
+        if ($chunks->isEmpty()) {
+            return "";
+        }
+
+        $out = "Relevant Document / Knowledge Base Excerpts:\n";
+        foreach ($chunks as $c) {
+            $out .= "[Doc: {$c->resource->name} (chunk #{$c->chunk_index})]:\n"
+                  . "{$c->content}\n"
+                  . "----------------------------------------\n";
         }
 
         return $out;

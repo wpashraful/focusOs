@@ -177,7 +177,7 @@ class ChatController extends Controller
         }
 
         // 4. Normal streaming pipeline
-        return new StreamedResponse(function () use ($conversation, $contextBuilder, $routing, $toolRegistry) {
+        return new StreamedResponse(function () use ($conversation, $contextBuilder, $routing, $toolRegistry, $userText) {
             header('Content-Type: text/event-stream');
             header('Cache-Control: no-cache');
             header('Connection: keep-alive');
@@ -187,7 +187,7 @@ class ChatController extends Controller
             $projectContext = "";
             $project = $conversation->project;
             if ($project) {
-                $projectContext = $contextBuilder->build($project, 2000);
+                $projectContext = $contextBuilder->build($project, 2000, $userText);
             }
 
             $systemPrompt = "You are FocusOS AI Coach, a premium productivity coach helping the user stay on track.\n"

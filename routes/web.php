@@ -10,6 +10,7 @@ use App\Http\Controllers\SubtaskController;
 use App\Http\Controllers\RoutineController;
 use App\Http\Controllers\DailyTargetController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\ResourceController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -109,9 +110,13 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/chat/{conversation}/messages', [ChatController::class, 'store'])->name('chat.message');
     Route::get('/chat/{conversation}/stream', [ChatController::class, 'stream'])->name('chat.stream');
 
+    // ── Project Resources ────────────────────────────────────────────────────
+    Route::get('/projects/{project}/resources', [ResourceController::class, 'index'])->name('resources.index');
+    Route::post('/projects/{project}/resources', [ResourceController::class, 'store'])->name('resources.store');
+    Route::delete('/projects/{project}/resources/{resource}', [ResourceController::class, 'destroy'])->name('resources.destroy');
+
     // ── Remaining stubs ───────────────────────────────────────────────────────
     Route::get('/progress', fn() => Inertia::render('ComingSoon', ['page' => 'Progress']))->name('progress.index');
-    Route::get('/resources', fn() => Inertia::render('ComingSoon', ['page' => 'Resources']))->name('resources.index');
     Route::get('/ideas', fn() => Inertia::render('ComingSoon', ['page' => 'Future Ideas']))->name('ideas.index');
 });
 

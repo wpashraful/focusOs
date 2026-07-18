@@ -69,7 +69,7 @@ class ProcessAIChat implements ShouldQueue
         // 3. Build system prompt from active project context
         $projectContext = "";
         if ($this->conversation->project) {
-            $projectContext = $contextBuilder->build($this->conversation->project, 2000);
+            $projectContext = $contextBuilder->build($this->conversation->project, 2000, $this->userMessageText);
         }
 
         $systemPrompt = "You are FocusOS AI Coach, a premium productivity coach helping the user stay on track.\n"
