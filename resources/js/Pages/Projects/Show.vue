@@ -121,7 +121,10 @@
                         <!-- Model Name -->
                         <div class="field">
                             <label class="field__label">Model Name</label>
-                            <input v-model="aiForm.model_name" class="field__input" placeholder="e.g. gemini-1.5-flash" id="ai-model-input" />
+                            <select v-model="aiForm.model_name" class="field__select" id="ai-model-select">
+                                <option value="">— Select Model —</option>
+                                <option v-for="m in availableModels" :key="m" :value="m">{{ m }}</option>
+                            </select>
                         </div>
 
                         <!-- Temperature -->
@@ -155,7 +158,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { Link, useForm, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
@@ -189,21 +192,52 @@ const daysLeft = computed(() => {
 
 // ── AI Provider Settings ────────────────────────────────
 const providers       = ref([]);
+const availableModels = ref([]);
 const loadingProviders = ref(true);
 const aiSaved         = ref(false);
 
 const aiForm = ref({
     ai_provider_id: props.project.ai_setting?.ai_provider_id ?? '',
-    model_name:     props.project.ai_setting?.model_name     ?? 'gemini-1.5-flash',
+    model_name:     props.project.ai_setting?.model_name     ?? '',
     temperature:    props.project.ai_setting?.temperature    ?? 0.7,
     max_tokens:     props.project.ai_setting?.max_tokens     ?? 2048,
     system_prompt:  props.project.ai_setting?.system_prompt  ?? '',
+});
+
+const fetchModels = async (providerId) => {
+    if (!providerId) {
+        availableModels.value = [];
+        return;
+    }
+    try {
+        const res = await fetch(route('ai-providers.models', providerId), { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
+        availableModels.value = await res.json();
+        
+        // If current model name is not in the list, set to the first one available
+        if (!availableModels.value.includes(aiForm.value.model_name) && availableModels.value.length > 0) {
+            aiForm.value.model_name = availableModels.value[0];
+        }
+    } catch {
+        availableModels.value = [];
+    }
+};
+
+watch(() => aiForm.value.ai_provider_id, (newVal) => {
+    fetchModels(newVal);
 });
 
 onMounted(async () => {
     try {
         const res = await fetch(route('ai-providers.index'), { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
         providers.value = await res.json();
+        
+        if (aiForm.value.ai_provider_id) {
+            await fetchModels(aiForm.value.ai_provider_id);
+            // Overwrite auto-select with previously saved model name if it matches
+            if (props.project.ai_setting?.model_name) {
+                aiForm.value.model_name = props.project.ai_setting.model_name;
+            }
+        }
     } catch {}
     loadingProviders.value = false;
 });

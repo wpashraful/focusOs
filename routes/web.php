@@ -130,6 +130,7 @@ Route::middleware(['auth'])->group(function () {
 
     // ── AI Provider Settings ───────────────────────────────────────────────────
     Route::get('/ai-providers', [AIProviderController::class, 'index'])->name('ai-providers.index');
+    Route::get('/ai-providers/{provider}/models', [AIProviderController::class, 'models'])->name('ai-providers.models');
     Route::put('/projects/{project}/ai-settings', [AIProviderController::class, 'update'])->name('ai-settings.update');
 });
 
