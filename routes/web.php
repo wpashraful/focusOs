@@ -9,6 +9,7 @@ use App\Http\Controllers\TaskController;
 use App\Http\Controllers\SubtaskController;
 use App\Http\Controllers\RoutineController;
 use App\Http\Controllers\DailyTargetController;
+use App\Http\Controllers\ChatController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -102,8 +103,13 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/projects/{project}/routines/{routine}/slots/{slot}', [RoutineController::class, 'updateSlot'])->name('routine-slots.update');
     Route::delete('/projects/{project}/routines/{routine}/slots/{slot}', [RoutineController::class, 'destroySlot'])->name('routine-slots.destroy');
 
+    // ── AI Coach Chat ────────────────────────────────────────────────────────
+    Route::get('/chat/{id?}', [ChatController::class, 'index'])->name('chat.index');
+    Route::post('/chat', [ChatController::class, 'start'])->name('chat.start');
+    Route::post('/chat/{conversation}/messages', [ChatController::class, 'store'])->name('chat.message');
+    Route::get('/chat/{conversation}/stream', [ChatController::class, 'stream'])->name('chat.stream');
+
     // ── Remaining stubs ───────────────────────────────────────────────────────
-    Route::get('/chat', fn() => Inertia::render('ComingSoon', ['page' => 'AI Coach']))->name('chat.index');
     Route::get('/progress', fn() => Inertia::render('ComingSoon', ['page' => 'Progress']))->name('progress.index');
     Route::get('/resources', fn() => Inertia::render('ComingSoon', ['page' => 'Resources']))->name('resources.index');
     Route::get('/ideas', fn() => Inertia::render('ComingSoon', ['page' => 'Future Ideas']))->name('ideas.index');
