@@ -47,7 +47,7 @@
                 <div class="card">
                     <div class="card__header">
                         <h2 class="card__title">🕐 Today's Routine</h2>
-                        <Link :href="route('routine.edit')" class="card__link">Edit →</Link>
+                        <Link :href="currentProject?.id ? route('routine.edit', currentProject.id) : '#'" class="card__link">Edit →</Link>
                     </div>
                     <div class="routine-timeline" v-if="routineSlots.length">
                         <div v-for="slot in routineSlots" :key="slot.id"
@@ -58,7 +58,7 @@
                             <span v-if="isCurrentSlot(slot)" class="routine-slot__now">NOW</span>
                         </div>
                     </div>
-                    <p class="empty-state" v-else>No routine set. <Link :href="route('routine.edit')" class="link">Set one up →</Link></p>
+                    <p class="empty-state" v-else>No routine set. <Link :href="currentProject?.id ? route('routine.edit', currentProject.id) : '#'" class="link">Set one up →</Link></p>
                 </div>
 
             </div>

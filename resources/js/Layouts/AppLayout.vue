@@ -51,10 +51,12 @@
                 <div class="nav-section">
                     <span class="nav-section__title" v-show="!sidebarCollapsed">Project</span>
                     <NavItem
-                        :href="$page.props.currentProject ? route('resources.index', $page.props.currentProject.id) : '#'"
+                        :href="$page.props.currentProject?.id ? route('resources.index', $page.props.currentProject.id) : '#'"
                         icon="resources" label="Resources" :collapsed="sidebarCollapsed" @click="mobileOpen = false" />
                     <NavItem :href="route('ideas.index')" icon="ideas" label="Future Ideas" :collapsed="sidebarCollapsed" @click="mobileOpen = false" />
-                    <NavItem :href="route('routine.edit')" icon="routine" label="Routine" :collapsed="sidebarCollapsed" @click="mobileOpen = false" />
+                    <NavItem
+                        :href="$page.props.currentProject?.id ? route('routine.edit', $page.props.currentProject.id) : '#'"
+                        icon="routine" label="Routine" :collapsed="sidebarCollapsed" @click="mobileOpen = false" />
                 </div>
             </nav>
 
