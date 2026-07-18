@@ -114,7 +114,7 @@ class ProcessAIChat implements ShouldQueue
 
         // 6. Call AI with tools injection
         try {
-            $response = $aiProvider->chat($messages, [
+            $options = [
                 'tools'        => $tools,
                 'project'      => $this->conversation->project,
                 'log_callback' => function ($logData) use ($logger) {
@@ -122,7 +122,16 @@ class ProcessAIChat implements ShouldQueue
                     $logData['action'] = 'chat';
                     $logger->log($logData);
                 }
-            ]);
+            ];
+
+            $project = $this->conversation->project;
+            if ($project && $project->aiSetting) {
+                $options['model'] = $project->aiSetting->model_name;
+                $options['temperature'] = (float) $project->aiSetting->temperature;
+                $options['max_tokens'] = (int) $project->aiSetting->max_tokens;
+            }
+
+            $response = $aiProvider->chat($messages, $options);
 
             // 7. Save response to database
             Message::create([

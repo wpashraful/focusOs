@@ -200,7 +200,12 @@ class ChatController extends Controller
                 ->get()
                 ->reverse();
 
-            $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent?key=" . env('GEMINI_API_KEY');
+            $modelName = 'gemini-2.5-flash';
+            if ($project && $project->aiSetting) {
+                $modelName = $project->aiSetting->model_name;
+            }
+
+            $url = "https://generativelanguage.googleapis.com/v1beta/models/{$modelName}:streamGenerateContent?key=" . env('GEMINI_API_KEY');
 
             $payload = [
                 'contents' => [],
@@ -208,6 +213,19 @@ class ChatController extends Controller
                     'parts' => [['text' => $systemPrompt]]
                 ]
             ];
+
+            $generationConfig = [];
+            if ($project && $project->aiSetting) {
+                if ($project->aiSetting->temperature !== null) {
+                    $generationConfig['temperature'] = (float) $project->aiSetting->temperature;
+                }
+                if ($project->aiSetting->max_tokens !== null) {
+                    $generationConfig['maxOutputTokens'] = (int) $project->aiSetting->max_tokens;
+                }
+            }
+            if (!empty($generationConfig)) {
+                $payload['generationConfig'] = $generationConfig;
+            }
 
             // If the conversation already has a summary, prepend it
             if ($conversation->summary) {
