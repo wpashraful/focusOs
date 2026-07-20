@@ -35,6 +35,16 @@ class AIToolsSeeder extends Seeder
                 'description'   => 'Shift/delay all daily routine blocks starting from now by a specified duration in minutes.',
                 'handler_class' => \App\Services\AI\Tools\RescheduleRoutine::class,
             ],
+            [
+                'name'          => 'update_goal_progress',
+                'description'   => 'Update or increment current progress value of a project goal.',
+                'handler_class' => \App\Services\AI\Tools\UpdateGoalProgress::class,
+            ],
+            [
+                'name'          => 'update_project_phase',
+                'description'   => 'Update the active phase name and phase goal of the project.',
+                'handler_class' => \App\Services\AI\Tools\UpdateProjectPhase::class,
+            ],
         ];
 
         foreach ($tools as $t) {

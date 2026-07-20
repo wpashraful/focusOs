@@ -27,7 +27,8 @@ interface AIProviderInterface
      *
      * @param  string  $text
      * @param  array   $classes      List of classes to choose from (e.g. ['on_task', 'off_topic', 'future'])
+     * @param  \App\Models\Project|null $project Optional project context for provider resolution
      * @return string                The chosen class
      */
-    public function classify(string $text, array $classes): string;
+    public function classify(string $text, array $classes, ?\App\Models\Project $project = null): string;
 }

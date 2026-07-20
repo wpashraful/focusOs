@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Log;
 class GeminiProvider implements AIProviderInterface
 {
     protected string $apiKey;
-    protected string $defaultModel = 'gemini-3.5-flash';
+    protected string $defaultModel = 'gemini-2.0-flash';
 
     public function __construct()
     {
@@ -121,11 +121,10 @@ class GeminiProvider implements AIProviderInterface
 
     public function stream(array $messages, array $options = []): mixed
     {
-        // For streaming, let's keep it simple: we resolve tools before opening
-        // the stream, or let the controller handle it.
         $model = $options['model'] ?? $this->defaultModel;
         $temperature = $options['temperature'] ?? 0.7;
         $maxTokens = $options['max_tokens'] ?? 2048;
+        $tokenCallback = $options['token_callback'] ?? null;
 
         $payload = $this->buildPayload($messages, $temperature, $maxTokens);
 
@@ -137,25 +136,38 @@ class GeminiProvider implements AIProviderInterface
 
         $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:streamGenerateContent?key={$this->apiKey}";
 
-        return function () use ($url, $payload) {
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $url);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
-            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) {
-                echo $data;
-                ob_flush();
-                flush();
-                return strlen($data);
-            });
-            curl_exec($ch);
-            curl_close($ch);
-        };
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
+        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($tokenCallback) {
+            $lines = explode("\n", $data);
+            foreach ($lines as $line) {
+                $trimmed = trim($line);
+                if (empty($trimmed)) continue;
+
+                $trimmed = ltrim($trimmed, ',[');
+                $trimmed = rtrim($trimmed, ']');
+
+                $decoded = json_decode($trimmed, true);
+                $token = $decoded['candidates'][0]['content']['parts'][0]['text'] ?? null;
+
+                if (($token !== null && $token !== '') && $tokenCallback) {
+                    $tokenCallback($token);
+                }
+            }
+            return strlen($data);
+        });
+
+        curl_exec($ch);
+        curl_close($ch);
+
+        return null;
     }
 
-    public function classify(string $text, array $classes): string
+    public function classify(string $text, array $classes, ?\App\Models\Project $project = null): string
     {
         $prompt = "Classify the following user message into exactly one of these categories: [" . implode(', ', $classes) . "].\n"
                 . "Respond with ONLY the category name. Do not include extra text, explanation, or punctuation.\n\n"

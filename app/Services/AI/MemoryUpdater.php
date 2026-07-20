@@ -38,12 +38,19 @@ class MemoryUpdater
                     . "[Assistant]: \"{$assistantReply}\"\n\n"
                     . "JSON Output:";
 
-            $res = $this->aiProvider->chat([
-                ['role' => 'user', 'content' => $prompt]
-            ], [
+            $options = [
+                'project'     => $project,
                 'temperature' => 0.1,
                 'max_tokens'  => 500,
-            ]);
+            ];
+
+            if ($project && $project->aiSetting) {
+                $options['model'] = $project->aiSetting->model_name;
+            }
+
+            $res = $this->aiProvider->chat([
+                ['role' => 'user', 'content' => $prompt]
+            ], $options);
 
             // Simple cleaning of JSON fences if LLM returns them
             $text = trim($res['text']);

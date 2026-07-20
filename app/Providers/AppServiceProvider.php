@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Services\AI\AIProviderInterface;
 use App\Services\AI\GeminiProvider;
+use App\Services\AI\OpenRouterProvider;
 use App\Services\AI\ResourceRetrieverInterface;
 use App\Services\AI\MySQLKeywordRetriever;
 use Illuminate\Support\Facades\Vite;
@@ -22,7 +23,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(AIProviderInterface::class, GeminiProvider::class);
+        $this->app->singleton(AIProviderInterface::class, \App\Services\AI\ProviderManager::class);
         $this->app->singleton(ResourceRetrieverInterface::class, MySQLKeywordRetriever::class);
     }
 
@@ -35,5 +36,6 @@ class AppServiceProvider extends ServiceProvider
 
         Event::listen(TaskCompleted::class, UpdateDashboardStats::class);
         Event::listen(DailyLogUpdated::class, RecalculateDailyScore::class);
+        Event::listen(\App\Events\ProjectStateUpdated::class, \App\Listeners\SyncGoalProgressToSheets::class);
     }
 }

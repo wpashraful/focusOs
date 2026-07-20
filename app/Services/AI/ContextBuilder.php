@@ -156,11 +156,14 @@ class ContextBuilder
             $daysSinceUpdate = now()->diffInDays($memory->updated_at);
             $recencyScore = 1 / (1 + $daysSinceUpdate);
             $score = ($memory->importance_score * 0.6) + ($recencyScore * 0.4);
-            $memory->temp_score = $score;
-            return $memory;
+            return [
+                'model' => $memory,
+                'score' => $score
+            ];
         })
-        ->sortByDesc('temp_score')
-        ->take(15);
+        ->sortByDesc('score')
+        ->take(15)
+        ->pluck('model');
 
         $out = "Remembered Context / User Preferences:\n";
         foreach ($sorted as $m) {

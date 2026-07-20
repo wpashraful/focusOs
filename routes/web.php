@@ -15,6 +15,7 @@ use App\Http\Controllers\TelegramWebhookController;
 use App\Http\Controllers\ProgressController;
 use App\Http\Controllers\FutureIdeasController;
 use App\Http\Controllers\AIProviderController;
+use App\Http\Controllers\GoogleOAuthController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -58,6 +59,10 @@ Route::middleware(['auth'])->group(function () {
     // Telegram account linking
     Route::get('/settings/telegram', [TelegramLinkController::class, 'show'])->name('telegram.settings');
     Route::delete('/settings/telegram', [TelegramLinkController::class, 'unlink'])->name('telegram.unlink');
+
+    // Google Sheets OAuth
+    Route::get('/google/auth', [GoogleOAuthController::class, 'redirectToGoogle'])->name('google.auth');
+    Route::get('/google/callback', [GoogleOAuthController::class, 'handleCallback'])->name('google.callback');
 
     // Workspaces
     Route::get('/workspaces', [WorkspaceController::class, 'index'])->name('workspaces.index');
@@ -113,6 +118,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/chat', [ChatController::class, 'start'])->name('chat.start');
     Route::post('/chat/{conversation}/messages', [ChatController::class, 'store'])->name('chat.message');
     Route::get('/chat/{conversation}/stream', [ChatController::class, 'stream'])->name('chat.stream');
+    Route::post('/chat/pending-actions/{action}/confirm', [ChatController::class, 'confirmAction'])->name('chat.pending-actions.confirm');
+    Route::post('/chat/pending-actions/{action}/cancel', [ChatController::class, 'cancelAction'])->name('chat.pending-actions.cancel');
+    Route::post('/chat/pending-actions/{action}/undo', [ChatController::class, 'undoAction'])->name('chat.pending-actions.undo');
 
     // ── Project Resources ────────────────────────────────────────────────────
     Route::get('/projects/{project}/resources', [ResourceController::class, 'index'])->name('resources.index');

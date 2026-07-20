@@ -43,6 +43,59 @@
                             </div>
                             <div class="msg-bubble">
                                 <p class="msg-bubble__content">{{ msg.content }}</p>
+
+                                <!-- PendingAction Card -->
+                                <div v-if="getActionForMessage(msg.id)" class="pending-action-card mt-2">
+                                    <div class="pending-action-card__header">
+                                        📂 Proposed State Update
+                                    </div>
+                                    <div class="pending-action-card__body">
+                                        <span class="capitalize">{{ getActionForMessage(msg.id).payload.operation }}</span>: 
+                                        <strong>{{ getActionForMessage(msg.id).payload.value }}</strong> 
+                                        {{ getActionForMessage(msg.id).payload.entity }}
+                                    </div>
+                                    
+                                    <div class="pending-action-card__actions mt-3">
+                                        <!-- If Pending -->
+                                        <template v-if="getActionForMessage(msg.id).status === 'pending'">
+                                            <button class="action-btn action-btn--confirm" @click="handleAction(getActionForMessage(msg.id).id, 'confirm')">
+                                                Confirm (Yes)
+                                            </button>
+                                            <button class="action-btn action-btn--cancel" @click="handleAction(getActionForMessage(msg.id).id, 'cancel')">
+                                                Cancel (No)
+                                            </button>
+                                        </template>
+                                        
+                                        <!-- If Confirmed (Show Undo) -->
+                                        <template v-else-if="getActionForMessage(msg.id).status === 'confirmed'">
+                                            <div class="flex items-center justify-between w-full">
+                                                <span class="status-badge status-badge--confirmed">✅ Applied</span>
+                                                <button 
+                                                    v-if="isUndoable(getActionForMessage(msg.id))" 
+                                                    class="action-btn action-btn--undo"
+                                                    @click="handleAction(getActionForMessage(msg.id).id, 'undo')"
+                                                >
+                                                    Undo
+                                                </button>
+                                            </div>
+                                        </template>
+                                        
+                                        <!-- If Cancelled -->
+                                        <template v-else-if="getActionForMessage(msg.id).status === 'cancelled'">
+                                            <span class="status-badge status-badge--cancelled">❌ Discarded</span>
+                                        </template>
+
+                                        <!-- If Undone -->
+                                        <template v-else-if="getActionForMessage(msg.id).status === 'undone'">
+                                            <span class="status-badge status-badge--undone">↩️ Reverted</span>
+                                        </template>
+
+                                        <!-- If Expired -->
+                                        <template v-else-if="getActionForMessage(msg.id).status === 'expired'">
+                                            <span class="status-badge status-badge--expired">⚠️ Expired (Out of Order)</span>
+                                        </template>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -126,6 +179,7 @@ const props = defineProps({
     activeConversation: Object,
     messages:           { type: Array, default: () => [] },
     projects:           { type: Array, default: () => [] },
+    pendingActions:     { type: Array, default: () => [] },
 });
 
 const showNewChat = ref(false);
@@ -136,7 +190,10 @@ const messagesContainer = ref(null);
 const isStreaming   = ref(false);
 const streamingText = ref('');
 
-const newChatForm = useForm({ title: '', project_id: null });
+const newChatForm = useForm({
+    title: '',
+    project_id: props.projects && props.projects.length > 0 ? props.projects[0].id : null
+});
 
 const submitNewChat = () => {
     newChatForm.post(route('chat.start'), {
@@ -219,10 +276,29 @@ const sendMessage = async () => {
         console.error('Streaming error', err);
     } finally {
         isStreaming.value = false;
-        // Reload page to fetch the completed assistant message from DB statefully
-        router.reload({ only: ['messages'] });
+        // Reload page to fetch the completed assistant message and actions from DB statefully
+        router.reload({ only: ['messages', 'pendingActions'] });
         streamingText.value = '';
     }
+};
+
+const getActionForMessage = (messageId) => {
+    return props.pendingActions.find(a => a.message_id == messageId);
+};
+
+const handleAction = async (actionId, type) => {
+    try {
+        await axios.post(route(`chat.pending-actions.${type}`, actionId));
+        router.reload({ only: ['messages', 'pendingActions'] });
+    } catch (err) {
+        console.error(`Failed to ${type} action`, err);
+    }
+};
+
+const isUndoable = (action) => {
+    if (action.status !== 'confirmed') return false;
+    const diff = Date.now() - new Date(action.updated_at).getTime();
+    return diff <= 5 * 60 * 1000; // 5 minutes window
 };
 
 const formatTime = (d) => new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -337,4 +413,87 @@ const formatTime = (d) => new Date(d).toLocaleTimeString([], { hour: '2-digit', 
     cursor: pointer; font-family: inherit; transition: all 0.15s;
 }
 .btn-ghost:hover { border-color: #6366f1; color: #a5b4fc; }
+
+/* Staged Actions styles */
+.pending-action-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 10px;
+    font-size: 0.8rem;
+    color: #e2e8f0;
+}
+.pending-action-card__header {
+    font-weight: 700;
+    color: #a5b4fc;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.pending-action-card__body {
+    margin-bottom: 8px;
+    color: #94a3b8;
+}
+.pending-action-card__actions {
+    display: flex;
+    gap: 8px;
+}
+.action-btn {
+    border: none;
+    border-radius: 5px;
+    padding: 6px 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+.action-btn:hover {
+    opacity: 0.9;
+}
+.action-btn--confirm {
+    background: #10b981;
+    color: white;
+}
+.action-btn--cancel {
+    background: #ef4444;
+    color: white;
+}
+.action-btn--undo {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+}
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+.status-badge--confirmed {
+    background: rgba(16, 185, 129, 0.1);
+    color: #34d399;
+}
+.status-badge--cancelled {
+    background: rgba(239, 68, 68, 0.1);
+    color: #f87171;
+}
+.status-badge--undone {
+    background: rgba(156, 163, 175, 0.1);
+    color: #9ca3af;
+}
+.status-badge--expired {
+    background: rgba(245, 158, 11, 0.1);
+    color: #fbbf24;
+}
+.mt-2 { margin-top: 8px; }
+.mt-3 { margin-top: 12px; }
+.w-full { width: 100%; }
+.flex { display: flex; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.capitalize { text-transform: capitalize; }
 </style>
