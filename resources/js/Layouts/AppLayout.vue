@@ -39,6 +39,7 @@
                     <span class="nav-section__title" v-show="!sidebarCollapsed">Workspace</span>
                     <NavItem :href="route('dashboard')" icon="dashboard" label="Dashboard" :collapsed="sidebarCollapsed" @click="mobileOpen = false" />
                     <NavItem :href="route('projects.index')" icon="projects" label="Projects" :collapsed="sidebarCollapsed" @click="mobileOpen = false" />
+                    <NavItem :href="route('leads.index')" icon="scraper" label="Lead Intelligence" :collapsed="sidebarCollapsed" @click="mobileOpen = false" />
                 </div>
 
                 <div class="nav-section">

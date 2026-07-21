@@ -140,6 +140,65 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/ai-providers', [AIProviderController::class, 'index'])->name('ai-providers.index');
     Route::get('/ai-providers/{provider}/models', [AIProviderController::class, 'models'])->name('ai-providers.models');
     Route::put('/projects/{project}/ai-settings', [AIProviderController::class, 'update'])->name('ai-settings.update');
+
+    // ── Lead Intelligence ────────────────────────────────────────────────────
+    Route::get('/leads', [\App\Http\Controllers\LeadIntelligenceController::class, 'index'])->name('leads.index');
+    Route::post('/leads/{lead}/scan', [\App\Http\Controllers\LeadIntelligenceController::class, 'scan'])->name('leads.scan');
+    Route::post('/leads/{lead}/send-email', [\App\Http\Controllers\LeadIntelligenceController::class, 'sendEmail'])->name('leads.send-email');
+    Route::post('/leads/settings', [\App\Http\Controllers\LeadIntelligenceController::class, 'saveSettings'])->name('leads.settings');
+    Route::post('/leads/enrich-all', [\App\Http\Controllers\LeadIntelligenceController::class, 'enrichAll'])->name('leads.enrich-all');
+    Route::get('/leads/export', [\App\Http\Controllers\LeadIntelligenceController::class, 'exportCsv'])->name('leads.export');
+    Route::post('/leads/matrix/run', [\App\Http\Controllers\LeadIntelligenceController::class, 'runCoverageMatrix'])->name('leads.matrix.run');
+    Route::post('/leads/campaigns', [\App\Http\Controllers\LeadIntelligenceController::class, 'runTargetingCampaign'])->name('leads.campaigns.run');
+    Route::post('/leads/keywords/suggest', [\App\Http\Controllers\LeadIntelligenceController::class, 'suggestKeywords'])->name('leads.keywords.suggest');
+    Route::delete('/leads/keywords/{keyword}', [\App\Http\Controllers\LeadIntelligenceController::class, 'destroyKeyword'])->name('leads.keywords.destroy');
+    Route::post('/leads/variations', [\App\Http\Controllers\LeadIntelligenceController::class, 'storeVariation'])->name('leads.variations.store');
+    Route::delete('/leads/variations/{variation}', [\App\Http\Controllers\LeadIntelligenceController::class, 'destroyVariation'])->name('leads.variations.destroy');
+    Route::post('/leads/keywords/import', [\App\Http\Controllers\LeadIntelligenceController::class, 'importKeywordsCsv'])->name('leads.keywords.import');
+    Route::post('/leads/cities/import', [\App\Http\Controllers\LeadIntelligenceController::class, 'importCitiesCsv'])->name('leads.cities.import');
+    Route::get('/leads/keywords/export', [\App\Http\Controllers\LeadIntelligenceController::class, 'exportKeywordsCsv'])->name('leads.keywords.export');
+    Route::get('/leads/cities/export', [\App\Http\Controllers\LeadIntelligenceController::class, 'exportCitiesCsv'])->name('leads.cities.export');
+    Route::post('/leads/industries', [\App\Http\Controllers\LeadIntelligenceController::class, 'storeIndustry'])->name('leads.industries.store');
+    Route::delete('/leads/industries/{industry}', [\App\Http\Controllers\LeadIntelligenceController::class, 'destroyIndustry'])->name('leads.industries.destroy');
+    Route::post('/leads/locations', [\App\Http\Controllers\LeadIntelligenceController::class, 'storeLocation'])->name('leads.locations.store');
+    Route::delete('/leads/locations/{location}', [\App\Http\Controllers\LeadIntelligenceController::class, 'destroyLocation'])->name('leads.locations.destroy');
+});
+
+// Public webhook and preflight endpoints for Chrome extension
+Route::post('/api/leads', [\App\Http\Controllers\LeadIntelligenceController::class, 'storeApi']);
+Route::options('/api/leads', function() {
+    return response('', 204)->withHeaders([
+        'Access-Control-Allow-Origin' => '*',
+        'Access-Control-Allow-Methods' => 'POST, GET, OPTIONS',
+        'Access-Control-Allow-Headers' => 'Content-Type, Accept, Authorization, X-Requested-With',
+    ]);
+});
+
+Route::get('/api/tasks/poll', [\App\Http\Controllers\LeadIntelligenceController::class, 'pollTasks']);
+Route::options('/api/tasks/poll', function() {
+    return response('', 204)->withHeaders([
+        'Access-Control-Allow-Origin' => '*',
+        'Access-Control-Allow-Methods' => 'GET, OPTIONS',
+        'Access-Control-Allow-Headers' => 'Content-Type, Accept, Authorization, X-Requested-With',
+    ]);
+});
+
+Route::post('/api/sessions/start', [\App\Http\Controllers\LeadIntelligenceController::class, 'startSession']);
+Route::options('/api/sessions/start', function() {
+    return response('', 204)->withHeaders([
+        'Access-Control-Allow-Origin' => '*',
+        'Access-Control-Allow-Methods' => 'POST, OPTIONS',
+        'Access-Control-Allow-Headers' => 'Content-Type, Accept, Authorization, X-Requested-With',
+    ]);
+});
+
+Route::post('/api/sessions/finish', [\App\Http\Controllers\LeadIntelligenceController::class, 'finishSession']);
+Route::options('/api/sessions/finish', function() {
+    return response('', 204)->withHeaders([
+        'Access-Control-Allow-Origin' => '*',
+        'Access-Control-Allow-Methods' => 'POST, OPTIONS',
+        'Access-Control-Allow-Headers' => 'Content-Type, Accept, Authorization, X-Requested-With',
+    ]);
 });
 
 Route::post('/telegram/webhook', [TelegramWebhookController::class, 'handle'])->name('telegram.webhook');
